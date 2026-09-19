@@ -1,0 +1,18 @@
+{
+  "name": "xuliu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "序流 Xuliu — 持续集成系统（流水线编排 + 仪表盘）",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node tests/run-tests.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.14"
+  }
+}

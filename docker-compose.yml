@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: xuliu-db
+    environment:
+      POSTGRES_USER: xuliu
+      POSTGRES_PASSWORD: xuliu123
+      POSTGRES_DB: xuliu
+    volumes:
+      - xuliu-pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xuliu -d xuliu"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    container_name: xuliu-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: xuliu
+      PGPASSWORD: xuliu123
+      PGDATABASE: xuliu
+      PORT: "8130"
+    ports:
+      - "8130:8130"
+
+volumes:
+  xuliu-pgdata:

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>序流 Xuliu · 持续集成系统</title>
+  <link rel="stylesheet" href="/css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><path d='M9 10h14M9 16h14M9 22h8' stroke='white' stroke-width='2.4' stroke-linecap='round'/></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">序流</span>
+      <span class="brand-sub">Xuliu CI</span>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-view="orchestration">流水线编排</button>
+      <button class="nav-item" data-view="dashboard">仪表盘</button>
+    </nav>
+    <div class="topbar-right">
+      <span id="health-dot" class="health-dot" title="服务状态"></span>
+    </div>
+  </header>
+
+  <!-- ========== 流水线编排：三端布局 ========== -->
+  <main id="view-orchestration" class="view orch">
+    <!-- 左端：流水线列表 -->
+    <aside class="pane pane-left">
+      <div class="pane-head">
+        <h2>流水线</h2>
+        <button id="btn-new-pipeline" class="btn btn-ghost btn-sm" title="新建流水线">＋ 新建</button>
+      </div>
+      <div id="pipeline-list" class="pipeline-list"></div>
+    </aside>
+
+    <!-- 中间：DAG 画布 -->
+    <section class="pane pane-center">
+      <div class="canvas-toolbar">
+        <div class="canvas-title">
+          <strong id="canvas-pipeline-name">请选择一条流水线</strong>
+          <span id="canvas-pipeline-meta" class="muted"></span>
+        </div>
+        <div class="canvas-actions">
+          <button id="btn-add-stage" class="btn btn-secondary btn-sm" disabled>＋ 添加阶段</button>
+          <button id="btn-auto-layout" class="btn btn-ghost btn-sm" disabled>自动排版</button>
+          <button id="btn-run" class="btn btn-primary btn-sm" disabled>▶ 触发运行</button>
+          <button id="btn-save" class="btn btn-save btn-sm" disabled>保存编排</button>
+        </div>
+      </div>
+
+      <div id="cycle-banner" class="cycle-banner hidden">
+        <span class="cycle-icon">⛔</span>
+        <div>
+          <strong>检测到环形依赖，已拦截保存</strong>
+          <div id="cycle-path" class="cycle-path"></div>
+        </div>
+        <button id="btn-dismiss-cycle" class="btn btn-ghost btn-sm">知道了</button>
+      </div>
+
+      <div id="canvas-wrap" class="canvas-wrap">
+        <svg id="dag-svg" class="dag-svg">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#9aa0a6"></path>
+            </marker>
+            <marker id="arrow-cycle" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#d03b3b"></path>
+            </marker>
+          </defs>
+          <g id="edge-layer"></g>
+          <g id="ghost-edge-layer"></g>
+          <g id="node-layer"></g>
+        </svg>
+        <div id="canvas-empty" class="canvas-empty">
+          <div class="empty-art">⇄</div>
+          <p>从左侧选择一条流水线开始编排</p>
+          <p class="muted small">拖动节点右侧圆点连到下一节点的左侧圆点即可建立依赖</p>
+        </div>
+      </div>
+
+      <div class="canvas-statusbar">
+        <span id="save-state" class="muted small"></span>
+        <span class="muted small">提示：拖动节点移动位置 · 从右侧圆点拉线建立依赖 · 点击连线后按 Delete 删除</span>
+      </div>
+    </section>
+
+    <!-- 右端：阶段属性 -->
+    <aside class="pane pane-right">
+      <div class="pane-head"><h2>阶段属性</h2></div>
+      <div id="stage-props" class="stage-props">
+        <div class="props-empty muted">
+          在画布上点击一个阶段节点进行编辑；<br/>拖线即可建立阶段依赖，无需下拉选择。
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ========== 仪表盘 ========== -->
+  <main id="view-dashboard" class="view dashboard hidden">
+    <div class="dash-head">
+      <h1>仪表盘</h1>
+      <div class="dash-controls">
+        <label class="gate-threshold">
+          人工卡点红灯阈值
+          <input id="gate-hours" type="number" min="1" max="168" value="4" />
+          小时
+        </label>
+        <button id="btn-refresh-dash" class="btn btn-secondary btn-sm">刷新</button>
+      </div>
+    </div>
+
+    <div class="kpi-row" id="kpi-row"></div>
+
+    <div class="chart-row">
+      <section class="card chart-card">
+        <h3>近 7 天运行次数</h3>
+        <div id="chart-runs" class="chart-body"></div>
+      </section>
+      <section class="card chart-card">
+        <h3>近 7 天成功率</h3>
+        <div id="chart-rate" class="chart-body"></div>
+      </section>
+    </div>
+
+    <section class="card alert-card" id="stuck-card">
+      <div class="card-head">
+        <h3><span class="red-dot"></span> 卡在人工卡点超过 <em id="stuck-thr-label">4</em> 小时</h3>
+        <span id="stuck-count" class="badge badge-critical">0</span>
+      </div>
+      <div id="stuck-list" class="stuck-list"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>最近执行记录</h3></div>
+      <div id="recent-runs" class="table-wrap"></div>
+    </section>
+  </main>
+
+  <!-- 执行详情弹层 -->
+  <div id="run-modal" class="modal-mask hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="run-modal-title">执行详情</h3>
+        <button id="btn-close-modal" class="btn btn-ghost btn-sm">关闭</button>
+      </div>
+      <div id="run-modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/canvas.js"></script>
+  <script src="/js/orchestration.js"></script>
+  <script src="/js/dashboard.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

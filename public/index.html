@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>序流 · 持续集成系统</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23256abf'/><path d='M9 22V10l7 7 7-7v12' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 32 32"><path d="M7 23V9l9 9 9-9v14" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <div class="brand-text">
+        <strong>序流</strong>
+        <small>XULIU CI</small>
+      </div>
+    </div>
+    <nav class="nav-tabs" role="tablist">
+      <button class="nav-tab active" data-view="editor" role="tab">流水线编排</button>
+      <button class="nav-tab" data-view="dashboard" role="tab">仪表盘</button>
+    </nav>
+    <div class="topbar-right">
+      <span class="env-badge">prod · 8130</span>
+      <span id="clock" class="clock"></span>
+    </div>
+  </header>
+
+  <!-- ============ 编排视图：三端布局 ============ -->
+  <main id="view-editor" class="view editor-view">
+    <!-- 左：流水线列表 -->
+    <aside class="pane pane-left">
+      <div class="pane-head">
+        <h2>流水线</h2>
+        <button id="btn-new-pipeline" class="btn btn-primary btn-sm" title="新建流水线">＋ 新建</button>
+      </div>
+      <div id="pipeline-list" class="pipeline-list"></div>
+      <div class="pane-foot">
+        <span id="pipeline-count"></span>
+      </div>
+    </aside>
+
+    <!-- 中：DAG 画布 -->
+    <section class="pane pane-center">
+      <div class="canvas-toolbar">
+        <div class="canvas-title">
+          <h2 id="canvas-pipeline-name">请选择流水线</h2>
+          <span id="canvas-pipeline-desc" class="muted"></span>
+        </div>
+        <div class="canvas-actions">
+          <button id="btn-add-stage" class="btn btn-ghost btn-sm" disabled>＋ 阶段</button>
+          <button id="btn-auto-layout" class="btn btn-ghost btn-sm" disabled>自动排版</button>
+          <button id="btn-trigger" class="btn btn-ghost btn-sm" disabled>▶ 触发运行</button>
+          <button id="btn-save" class="btn btn-primary btn-sm" disabled>保存编排</button>
+        </div>
+      </div>
+      <div id="cycle-banner" class="cycle-banner hidden" role="alert"></div>
+      <div id="canvas-viewport" class="canvas-viewport">
+        <svg id="edge-svg" class="edge-svg">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#8b94a3"></path>
+            </marker>
+            <marker id="arrow-cycle" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#d03b3b"></path>
+            </marker>
+          </defs>
+          <g id="edge-layer" class="edge-layer"></g>
+          <path id="edge-draft" class="edge-draft" d="" fill="none" stroke="#2a78d6" stroke-width="2" stroke-dasharray="6 4"></path>
+        </svg>
+        <div id="node-layer" class="node-layer"></div>
+        <div id="canvas-hint" class="canvas-hint">
+          <p>从左侧选择一条流水线开始编辑</p>
+          <ul>
+            <li>拖动节点<strong>右侧圆点</strong>到另一个节点 = 建立依赖连线</li>
+            <li>点击连线可删除；节点可在画布内自由拖动</li>
+            <li>保存时自动校验环形依赖，命中环会被拦截并高亮</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右：属性 / 执行记录 -->
+    <aside class="pane pane-right">
+      <div class="right-tabs">
+        <button class="right-tab active" data-rtab="props">阶段属性</button>
+        <button class="right-tab" data-rtab="runs">执行记录 <span id="run-badge" class="mini-badge hidden">0</span></button>
+      </div>
+      <div id="rtab-props" class="rtab">
+        <div id="props-empty" class="empty-tip">选中画布上的阶段节点以编辑属性</div>
+        <form id="stage-form" class="stage-form hidden">
+          <label>阶段名称
+            <input type="text" id="f-name" maxlength="40" />
+          </label>
+          <label>阶段类型
+            <select id="f-type"></select>
+          </label>
+          <div class="form-row">
+            <label>超时（分钟）
+              <input type="number" id="f-timeout" min="1" max="1440" step="1" />
+            </label>
+            <label>失败策略
+              <select id="f-policy">
+                <option value="abort">中止流水线</option>
+                <option value="continue">继续执行</option>
+              </select>
+            </label>
+          </div>
+          <div class="deps-editor">
+            <div class="deps-head"><span>前置依赖</span><small>从画布圆点拖入，点 × 移除</small></div>
+            <div id="f-deps" class="deps-chips"></div>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btn-apply-stage" class="btn btn-primary btn-sm">应用</button>
+            <button type="button" id="btn-delete-stage" class="btn btn-danger-ghost btn-sm">删除阶段</button>
+          </div>
+        </form>
+        <div id="pipeline-meta" class="pipeline-meta hidden">
+          <h3>流水线信息</h3>
+          <label>名称<input type="text" id="f-pl-name" maxlength="60" /></label>
+          <label>描述<textarea id="f-pl-desc" rows="2" maxlength="300"></textarea></label>
+          <div class="form-actions" style="margin-top:4px">
+            <button type="button" id="btn-delete-pipeline" class="btn btn-danger-ghost btn-sm">删除此流水线</button>
+          </div>
+          <p class="muted small">点击空白处可取消选择。</p>
+        </div>
+      </div>
+      <div id="rtab-runs" class="rtab hidden">
+        <div id="runs-list" class="runs-list"></div>
+        <div id="run-detail" class="run-detail hidden"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============ 仪表盘视图 ============ -->
+  <main id="view-dashboard" class="view dashboard-view hidden">
+    <div class="dash-head">
+      <h1>仪表盘</h1>
+      <div class="dash-controls">
+        <label class="threshold-control">人工卡点红灯阈值
+          <input type="number" id="gate-hours" min="1" max="168" step="1" /> 小时
+        </label>
+        <button id="btn-refresh-dash" class="btn btn-ghost btn-sm">刷新</button>
+      </div>
+    </div>
+
+    <section class="kpi-row">
+      <div class="kpi-tile">
+        <div class="kpi-label">今日运行次数</div>
+        <div class="kpi-value" id="kpi-total">–</div>
+        <div class="kpi-sub" id="kpi-total-sub"></div>
+      </div>
+      <div class="kpi-tile">
+        <div class="kpi-label">今日成功率</div>
+        <div class="kpi-value" id="kpi-rate">–</div>
+        <div class="kpi-sub" id="kpi-rate-sub"></div>
+      </div>
+      <div class="kpi-tile">
+        <div class="kpi-label">今日平均时长</div>
+        <div class="kpi-value" id="kpi-avg">–</div>
+        <div class="kpi-sub" id="kpi-avg-sub"></div>
+      </div>
+      <div class="kpi-tile kpi-critical" id="kpi-gate-tile">
+        <div class="kpi-label">🚨 卡点超时红灯 <span class="thr-hint" id="thr-hint"></span></div>
+        <div class="kpi-value" id="kpi-gates">–</div>
+        <div class="kpi-sub" id="kpi-gates-sub"></div>
+      </div>
+    </section>
+
+    <div class="dash-grid">
+      <section class="card trend-card">
+        <div class="card-head"><h2>近 7 天执行趋势</h2></div>
+        <div id="trend-chart"></div>
+        <div class="card-head"><h3>明细</h3></div>
+        <div id="trend-table"></div>
+      </section>
+      <section class="card gates-card">
+        <div class="card-head">
+          <h2>人工卡点队列</h2>
+          <span class="muted small" id="gates-summary"></span>
+        </div>
+        <div id="gates-list" class="gates-list"></div>
+      </section>
+    </div>
+
+    <section class="card recent-card">
+      <div class="card-head"><h2>最近执行记录</h2></div>
+      <div id="recent-runs"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

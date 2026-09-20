@@ -1,0 +1,15 @@
+{
+  "name": "xuliu",
+  "version": "1.0.0",
+  "description": "序流 - 持续集成系统（流水线编排 + 仪表盘）",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node server/seed.js --force",
+    "test": "node tests/api-smoke.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,22 @@
+services:
+  xuliu:
+    build: .
+    image: xuliu-ci:1.0
+    container_name: xuliu-ci
+    ports:
+      - "8130:8130"
+    environment:
+      # 人工卡点等待超过该小时数 -> 仪表盘亮红灯（可在页面上临时调整）
+      GATE_RED_HOURS: "4"
+      DATA_DIR: /data
+    volumes:
+      - xuliu-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8130/api/meta').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  xuliu-data:
